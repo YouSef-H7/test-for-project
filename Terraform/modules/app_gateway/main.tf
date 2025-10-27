@@ -53,10 +53,10 @@ resource "azurerm_application_gateway" "appgw" {
   request_routing_rule {
     name                       = "defaultRule"
     rule_type                  = "Basic"
-    http_listener_name          = "defaultListener"
-    backend_address_pool_name   = "defaultBackendPool"
-    backend_http_settings_name  = "defaultBackendSetting"
-    priority                    = 100
+    http_listener_name         = "defaultListener"
+    backend_address_pool_name  = "defaultBackendPool"
+    backend_http_settings_name = "defaultBackendSetting"
+    priority                   = 100
   }
 
   tags = {
