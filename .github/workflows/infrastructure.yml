@@ -134,9 +134,26 @@ jobs:
           echo "📦 Checking Application Gateway in error-team-rg..."
           if az network application-gateway show --name appgw-team4 --resource-group ${{ env.RESOURCE_GROUP_ALT }} &>/dev/null; then
             echo "✅ Found Application Gateway in error-team-rg, attempting import..."
-            terraform import -no-color module.app_gateway.azurerm_application_gateway.app_gateway "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP_ALT }}/providers/Microsoft.Network/applicationGateways/appgw-team4" 2>&1 | tee /tmp/appgw_import.log || echo "⚠️  Import failed or already imported"
+            terraform import -no-color module.app_gateway.azurerm_application_gateway.appgw "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP_ALT }}/providers/Microsoft.Network/applicationGateways/appgw-team4" 2>&1 | tee /tmp/appgw_import.log || echo "⚠️  Import failed or already imported"
           else
             echo "ℹ️  Application Gateway not found - will be created"
+          fi
+          
+          # Role Assignment for ACR Pull
+          echo "📦 Checking ACR Pull Role Assignment..."
+          ACR_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP_ALT }}/providers/Microsoft.ContainerRegistry/registries/${{ env.ACR_NAME }}"
+          AKS_PRINCIPAL=$(az aks show --name ${{ env.AKS_CLUSTER_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "identityProfile.kubeletidentity.objectId" -o tsv 2>/dev/null || echo "")
+          
+          if [ -n "$AKS_PRINCIPAL" ]; then
+            ROLE_ASSIGNMENT_ID=$(az role assignment list --assignee "$AKS_PRINCIPAL" --scope "$ACR_ID" --role "AcrPull" --query "[0].id" -o tsv 2>/dev/null || echo "")
+            if [ -n "$ROLE_ASSIGNMENT_ID" ]; then
+              echo "✅ Found ACR Pull role assignment, attempting import..."
+              terraform import -no-color module.aks.azurerm_role_assignment.acr_pull "$ROLE_ASSIGNMENT_ID" 2>&1 | tee /tmp/role_import.log || echo "⚠️  Import failed or already imported"
+            else
+              echo "ℹ️  ACR Pull role assignment not found - will be created"
+            fi
+          else
+            echo "ℹ️  AKS not found, skipping role assignment import"
           fi
           
           echo ""
