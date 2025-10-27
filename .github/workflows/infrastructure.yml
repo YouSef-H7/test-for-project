@@ -110,6 +110,24 @@ jobs:
             echo "ℹ️  VNet not found - will be created"
           fi
           
+          # AKS Subnet
+          echo "📦 Checking AKS Subnet..."
+          if az network vnet subnet show --name subnet-aks --vnet-name vnet-team4 --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
+            echo "✅ Found AKS Subnet, importing..."
+            terraform import -no-color module.network.azurerm_subnet.aks_subnet "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4/subnets/subnet-aks" || true
+          else
+            echo "ℹ️  AKS Subnet not found - will be created"
+          fi
+          
+          # Application Gateway Subnet
+          echo "📦 Checking App Gateway Subnet..."
+          if az network vnet subnet show --name subnet-appgw --vnet-name vnet-team4 --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
+            echo "✅ Found App Gateway Subnet, importing..."
+            terraform import -no-color module.network.azurerm_subnet.appgw_subnet "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4/subnets/subnet-appgw" || true
+          else
+            echo "ℹ️  App Gateway Subnet not found - will be created"
+          fi
+          
           # Application Gateway
           echo "📦 Checking Application Gateway..."
           if az network application-gateway show --name appgw-team4 --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
