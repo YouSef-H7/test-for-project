@@ -150,10 +150,13 @@ jobs:
             if [ -n "$ROLE_ASSIGNMENT_ID" ]; then
               echo "✅ Found ACR Pull role assignment, attempting import..."
               echo "Import command: terraform import -no-color module.aks.azurerm_role_assignment.acr_pull $ROLE_ASSIGNMENT_ID"
+              echo "--- BEGIN ACR IMPORT ---"
               timeout 120 terraform import -no-color module.aks.azurerm_role_assignment.acr_pull "$ROLE_ASSIGNMENT_ID" 2>&1 | tee /tmp/role_import.log
               IMPORT_EXIT_CODE=${PIPESTATUS[0]}
+              echo "--- END ACR IMPORT (exit code: $IMPORT_EXIT_CODE) ---"
+              cat /tmp/role_import.log
               if [ $IMPORT_EXIT_CODE -ne 0 ]; then
-                echo "❌ Import failed with exit code $IMPORT_EXIT_CODE. See /tmp/role_import.log for details."
+                echo "❌ Import failed with exit code $IMPORT_EXIT_CODE. See above for details."
               fi
             else
               echo "ℹ️  ACR Pull role assignment not found - will be created"
