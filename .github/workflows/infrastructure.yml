@@ -148,7 +148,7 @@ jobs:
             ROLE_ASSIGNMENT_ID=$(az role assignment list --assignee "$AKS_PRINCIPAL" --scope "$ACR_ID" --role "AcrPull" --query "[0].id" -o tsv 2>/dev/null || echo "")
             if [ -n "$ROLE_ASSIGNMENT_ID" ]; then
               echo "✅ Found ACR Pull role assignment, attempting import..."
-              terraform import -no-color module.aks.azurerm_role_assignment.acr_pull "$ROLE_ASSIGNMENT_ID" 2>&1 | tee /tmp/role_import.log || echo "⚠️  Import failed or already imported"
+              timeout 120 terraform import -no-color module.aks.azurerm_role_assignment.acr_pull "$ROLE_ASSIGNMENT_ID" 2>&1 | tee /tmp/role_import.log || echo "⚠️  Import failed or already imported"
             else
               echo "ℹ️  ACR Pull role assignment not found - will be created"
             fi
@@ -166,7 +166,7 @@ jobs:
             AGIC_SUBNET_ROLE=$(az role assignment list --assignee "$AGIC_PRINCIPAL" --scope "$APPGW_SUBNET_ID" --role "Network Contributor" --query "[0].id" -o tsv 2>/dev/null || echo "")
             if [ -n "$AGIC_SUBNET_ROLE" ]; then
               echo "✅ Found AGIC Network Contributor role on subnet, attempting import..."
-              terraform import -no-color module.aks.azurerm_role_assignment.agic_subnet "$AGIC_SUBNET_ROLE" 2>&1 | tee /tmp/agic_subnet_role.log || echo "⚠️  Import failed or already imported"
+              timeout 120 terraform import -no-color module.aks.azurerm_role_assignment.agic_subnet "$AGIC_SUBNET_ROLE" 2>&1 | tee /tmp/agic_subnet_role.log || echo "⚠️  Import failed or already imported"
             else
               echo "ℹ️  AGIC subnet role assignment not found - will be created"
             fi
@@ -176,7 +176,7 @@ jobs:
             AGIC_APPGW_ROLE=$(az role assignment list --assignee "$AGIC_PRINCIPAL" --scope "$APPGW_ID" --role "Contributor" --query "[0].id" -o tsv 2>/dev/null || echo "")
             if [ -n "$AGIC_APPGW_ROLE" ]; then
               echo "✅ Found AGIC Contributor role on App Gateway, attempting import..."
-              terraform import -no-color module.aks.azurerm_role_assignment.agic_appgw "$AGIC_APPGW_ROLE" 2>&1 | tee /tmp/agic_appgw_role.log || echo "⚠️  Import failed or already imported"
+              timeout 120 terraform import -no-color module.aks.azurerm_role_assignment.agic_appgw "$AGIC_APPGW_ROLE" 2>&1 | tee /tmp/agic_appgw_role.log || echo "⚠️  Import failed or already imported"
             else
               echo "ℹ️  AGIC App Gateway role assignment not found - will be created"
             fi
