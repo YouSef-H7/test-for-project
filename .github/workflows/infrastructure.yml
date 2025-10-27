@@ -69,7 +69,159 @@ jobs:
         id: validate
         run: terraform validate -no-color
 
-      - name: 📋 Terraform Plan
+      - name: � Auto Import Existing Azure Resources
+        id: auto_import
+        run: |
+          echo "🔍 Starting automatic resource import detection..."
+          echo "══════════════════════════════════════════════════"
+          
+          # Set Azure subscription context
+          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" || true
+          
+          # Function to check and import resources
+          import_resource() {
+            local tf_resource_type=$1
+            local tf_resource_name=$2
+            local azure_resource_id=$3
+            
+            echo ""
+            echo "🔍 Checking: $tf_resource_type.$tf_resource_name"
+            
+            # Check if already in Terraform state
+            if terraform state show "$tf_resource_type.$tf_resource_name" &>/dev/null; then
+              echo "✅ Already managed by Terraform"
+              return 0
+            fi
+            
+            # Try to import
+            echo "📦 Attempting to import from Azure..."
+            if terraform import "$tf_resource_type.$tf_resource_name" "$azure_resource_id" 2>/dev/null; then
+              echo "✅ Successfully imported!"
+            else
+              echo "ℹ️  Resource not found in Azure or already managed - will be created/updated by plan"
+            fi
+          }
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 Checking Azure Container Registry (ACR)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Check ACR
+          ACR_EXISTS=$(az acr show --name "${{ env.ACR_NAME }}" --resource-group "${{ env.RESOURCE_GROUP }}" --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$ACR_EXISTS" ]; then
+            echo "🔍 Found ACR: ${{ env.ACR_NAME }}"
+            import_resource "azurerm_container_registry" "acr" "$ACR_EXISTS" || true
+          else
+            echo "ℹ️  ACR '${{ env.ACR_NAME }}' not found - will be created"
+          fi
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 Checking AKS Cluster"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Check AKS
+          AKS_EXISTS=$(az aks show --name "${{ env.AKS_CLUSTER_NAME }}" --resource-group "${{ env.RESOURCE_GROUP }}" --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$AKS_EXISTS" ]; then
+            echo "🔍 Found AKS Cluster: ${{ env.AKS_CLUSTER_NAME }}"
+            import_resource "azurerm_kubernetes_cluster" "aks" "$AKS_EXISTS" || true
+          else
+            echo "ℹ️  AKS Cluster '${{ env.AKS_CLUSTER_NAME }}' not found - will be created"
+          fi
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 Checking Virtual Network"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Check VNet (common naming patterns)
+          for VNET_NAME in "aks-vnet" "vnet-${{ env.AKS_CLUSTER_NAME }}" "network-vnet"; do
+            VNET_EXISTS=$(az network vnet show --name "$VNET_NAME" --resource-group "${{ env.RESOURCE_GROUP }}" --query id -o tsv 2>/dev/null || echo "")
+            if [ -n "$VNET_EXISTS" ]; then
+              echo "🔍 Found Virtual Network: $VNET_NAME"
+              import_resource "azurerm_virtual_network" "vnet" "$VNET_EXISTS" || true
+              break
+            fi
+          done
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 Checking Application Gateway"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Check Application Gateway
+          APPGW_LIST=$(az network application-gateway list --resource-group "${{ env.RESOURCE_GROUP }}" --query "[].{name:name,id:id}" -o json 2>/dev/null || echo "[]")
+          if [ "$APPGW_LIST" != "[]" ]; then
+            echo "$APPGW_LIST" | jq -r '.[] | "\(.name)|\(.id)"' | while IFS='|' read -r APPGW_NAME APPGW_ID; do
+              echo "🔍 Found Application Gateway: $APPGW_NAME"
+              import_resource "azurerm_application_gateway" "app_gateway" "$APPGW_ID" || true
+            done
+          else
+            echo "ℹ️  No Application Gateway found - will be created if defined"
+          fi
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 Checking Public IP Addresses"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Check Public IPs
+          PUBLIC_IP_LIST=$(az network public-ip list --resource-group "${{ env.RESOURCE_GROUP }}" --query "[].{name:name,id:id}" -o json 2>/dev/null || echo "[]")
+          if [ "$PUBLIC_IP_LIST" != "[]" ]; then
+            echo "$PUBLIC_IP_LIST" | jq -r '.[] | "\(.name)|\(.id)"' | while IFS='|' read -r IP_NAME IP_ID; do
+              echo "🔍 Found Public IP: $IP_NAME"
+              # Sanitize name for Terraform (replace hyphens with underscores)
+              TF_NAME=$(echo "$IP_NAME" | tr '-' '_' | tr '[:upper:]' '[:lower:]')
+              import_resource "azurerm_public_ip" "$TF_NAME" "$IP_ID" || true
+            done
+          else
+            echo "ℹ️  No Public IPs found - will be created if defined"
+          fi
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 Checking Resource Group"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Check Resource Group itself
+          RG_EXISTS=$(az group show --name "${{ env.RESOURCE_GROUP }}" --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$RG_EXISTS" ]; then
+            echo "🔍 Found Resource Group: ${{ env.RESOURCE_GROUP }}"
+            import_resource "azurerm_resource_group" "rg" "$RG_EXISTS" || true
+          else
+            echo "ℹ️  Resource Group '${{ env.RESOURCE_GROUP }}' not found - will be created"
+          fi
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 Scanning All Resources in Resource Group"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # List all resources in the resource group
+          ALL_RESOURCES=$(az resource list --resource-group "${{ env.RESOURCE_GROUP }}" --query "[].{name:name,type:type,id:id}" -o json 2>/dev/null || echo "[]")
+          if [ "$ALL_RESOURCES" != "[]" ]; then
+            echo "📊 Found $(echo "$ALL_RESOURCES" | jq '. | length') resources in Resource Group"
+            echo "$ALL_RESOURCES" | jq -r '.[] | "\(.type)|\(.name)|\(.id)"' | while IFS='|' read -r RESOURCE_TYPE RESOURCE_NAME RESOURCE_ID; do
+              echo "  📌 $RESOURCE_TYPE: $RESOURCE_NAME"
+            done
+          fi
+          
+          echo ""
+          echo "══════════════════════════════════════════════════"
+          echo "✅ Auto-import check completed!"
+          echo "══════════════════════════════════════════════════"
+          echo ""
+          echo "ℹ️  Note: Resources not in Terraform state will be planned for creation/update"
+          echo "ℹ️  This is normal for a fresh Terraform configuration"
+        env:
+          ARM_CLIENT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
+          ARM_CLIENT_SECRET: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).tenantId }}
+        continue-on-error: true
+
+      - name: �📋 Terraform Plan
         id: plan
         run: |
           terraform plan \
