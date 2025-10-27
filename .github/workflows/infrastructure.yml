@@ -73,82 +73,129 @@ jobs:
 
       - name: 🧠 Auto Import Existing Azure Resources
         id: auto_import
-        timeout-minutes: 10  # Add step-level timeout
+        timeout-minutes: 10
         run: |
           echo "🔍 Checking and importing existing Azure resources..."
           echo "ℹ️  Resources split across error-team-rg and error-team-rg2"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Helper function: Import with timeout and retry
+          import_resource() {
+            local RESOURCE_NAME="$1"
+            local TF_ADDRESS="$2"
+            local AZURE_ID="$3"
+            local MAX_RETRIES=2
+            local TIMEOUT=60
+            
+            echo ""
+            echo "📦 Importing: $RESOURCE_NAME"
+            
+            for attempt in $(seq 1 $MAX_RETRIES); do
+              echo "   Attempt $attempt/$MAX_RETRIES..."
+              
+              if timeout ${TIMEOUT}s terraform import -no-color "$TF_ADDRESS" "$AZURE_ID" 2>&1 | tee /tmp/import_${RESOURCE_NAME}.log; then
+                echo "   ✅ Successfully imported $RESOURCE_NAME"
+                return 0
+              else
+                EXIT_CODE=$?
+                if [ $EXIT_CODE -eq 124 ]; then
+                  echo "   ⏰ Timeout after ${TIMEOUT}s on attempt $attempt"
+                elif grep -q "already exists" /tmp/import_${RESOURCE_NAME}.log 2>/dev/null; then
+                  echo "   ℹ️  Already managed by Terraform"
+                  return 0
+                else
+                  echo "   ⚠️  Failed on attempt $attempt (exit code: $EXIT_CODE)"
+                fi
+                
+                if [ $attempt -lt $MAX_RETRIES ]; then
+                  echo "   🔄 Retrying in 3 seconds..."
+                  sleep 3
+                fi
+              fi
+            done
+            
+            echo "   ❌ Skipping $RESOURCE_NAME after $MAX_RETRIES attempts"
+            return 1
+          }
           
           # ACR (in error-team-rg)
-          echo "📦 Checking ACR in error-team-rg..."
+          echo ""
+          echo "� Checking ACR in error-team-rg..."
           if az acr show --name ${{ env.ACR_NAME }} --resource-group ${{ env.RESOURCE_GROUP_ALT }} &>/dev/null; then
-            echo "✅ Found ACR in error-team-rg, attempting import..."
-            terraform import -no-color module.acr.azurerm_container_registry.acr "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP_ALT }}/providers/Microsoft.ContainerRegistry/registries/${{ env.ACR_NAME }}" 2>&1 | tee /tmp/acr_import.log || echo "⚠️  Import failed or already imported"
+            ACR_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP_ALT }}/providers/Microsoft.ContainerRegistry/registries/${{ env.ACR_NAME }}"
+            import_resource "ACR" "module.acr.azurerm_container_registry.acr" "$ACR_ID"
           else
-            echo "ℹ️  ACR not found - will be created"
-          fi
-          
-          # AKS (in error-team-rg2)
-          echo "📦 Checking AKS in error-team-rg2..."
-          if az aks show --name ${{ env.AKS_CLUSTER_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found AKS in error-team-rg2, attempting import..."
-            terraform import -no-color module.aks.azurerm_kubernetes_cluster.aks "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.ContainerService/managedClusters/${{ env.AKS_CLUSTER_NAME }}" 2>&1 | tee /tmp/aks_import.log || echo "⚠️  Import failed or already imported"
-          else
-            echo "ℹ️  AKS not found - will be created"
-          fi
-          
-          # Public IP (in error-team-rg)
-          echo "📦 Checking Public IP in error-team-rg..."
-          if az network public-ip show --name appgw-team4-pip --resource-group ${{ env.RESOURCE_GROUP_ALT }} &>/dev/null; then
-            echo "✅ Found Public IP in error-team-rg, attempting import..."
-            terraform import -no-color module.app_gateway.azurerm_public_ip.appgw_pip "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP_ALT }}/providers/Microsoft.Network/publicIPAddresses/appgw-team4-pip" 2>&1 | tee /tmp/pip_import.log || echo "⚠️  Import failed or already imported"
-          else
-            echo "ℹ️  Public IP not found - will be created"
+            echo "   ℹ️  ACR not found - will be created"
           fi
           
           # VNet (in error-team-rg2)
-          echo "📦 Checking VNet in error-team-rg2..."
+          echo ""
+          echo "� Checking VNet in error-team-rg2..."
           if az network vnet show --name vnet-team4 --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found VNet in error-team-rg2, attempting import..."
-            terraform import -no-color module.network.azurerm_virtual_network.vnet "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4" 2>&1 | tee /tmp/vnet_import.log || echo "⚠️  Import failed or already imported"
+            VNET_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4"
+            import_resource "VNet" "module.network.azurerm_virtual_network.vnet" "$VNET_ID"
           else
-            echo "ℹ️  VNet not found - will be created"
+            echo "   ℹ️  VNet not found - will be created"
           fi
           
           # AKS Subnet (in error-team-rg2)
-          echo "📦 Checking AKS Subnet in error-team-rg2..."
+          echo ""
+          echo "� Checking AKS Subnet in error-team-rg2..."
           if az network vnet subnet show --name subnet-aks --vnet-name vnet-team4 --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found AKS Subnet in error-team-rg2, attempting import..."
-            terraform import -no-color module.network.azurerm_subnet.aks_subnet "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4/subnets/subnet-aks" 2>&1 | tee /tmp/aks_subnet_import.log || echo "⚠️  Import failed or already imported"
+            AKS_SUBNET_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4/subnets/subnet-aks"
+            import_resource "AKS_Subnet" "module.network.azurerm_subnet.aks_subnet" "$AKS_SUBNET_ID"
           else
-            echo "ℹ️  AKS Subnet not found - will be created"
+            echo "   ℹ️  AKS Subnet not found - will be created"
           fi
           
           # Application Gateway Subnet (in error-team-rg2)
-          echo "📦 Checking App Gateway Subnet in error-team-rg2..."
+          echo ""
+          echo "� Checking App Gateway Subnet in error-team-rg2..."
           if az network vnet subnet show --name subnet-appgw --vnet-name vnet-team4 --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found App Gateway Subnet in error-team-rg2, attempting import..."
-            terraform import -no-color module.network.azurerm_subnet.appgw_subnet "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4/subnets/subnet-appgw" 2>&1 | tee /tmp/appgw_subnet_import.log || echo "⚠️  Import failed or already imported"
+            APPGW_SUBNET_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4/subnets/subnet-appgw"
+            import_resource "AppGW_Subnet" "module.network.azurerm_subnet.appgw_subnet" "$APPGW_SUBNET_ID"
           else
-            echo "ℹ️  App Gateway Subnet not found - will be created"
+            echo "   ℹ️  App Gateway Subnet not found - will be created"
+          fi
+          
+          # Public IP (in error-team-rg)
+          echo ""
+          echo "� Checking Public IP in error-team-rg..."
+          if az network public-ip show --name appgw-team4-pip --resource-group ${{ env.RESOURCE_GROUP_ALT }} &>/dev/null; then
+            PIP_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP_ALT }}/providers/Microsoft.Network/publicIPAddresses/appgw-team4-pip"
+            import_resource "Public_IP" "module.app_gateway.azurerm_public_ip.appgw_pip" "$PIP_ID"
+          else
+            echo "   ℹ️  Public IP not found - will be created"
           fi
           
           # Application Gateway (in error-team-rg)
-          echo "📦 Checking Application Gateway in error-team-rg..."
+          echo ""
+          echo "� Checking Application Gateway in error-team-rg..."
           if az network application-gateway show --name appgw-team4 --resource-group ${{ env.RESOURCE_GROUP_ALT }} &>/dev/null; then
-            echo "✅ Found Application Gateway in error-team-rg, attempting import..."
-            terraform import -no-color module.app_gateway.azurerm_application_gateway.appgw "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP_ALT }}/providers/Microsoft.Network/applicationGateways/appgw-team4" 2>&1 | tee /tmp/appgw_import.log || echo "⚠️  Import failed or already imported"
+            APPGW_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP_ALT }}/providers/Microsoft.Network/applicationGateways/appgw-team4"
+            import_resource "App_Gateway" "module.app_gateway.azurerm_application_gateway.appgw" "$APPGW_ID"
           else
-            echo "ℹ️  Application Gateway not found - will be created"
+            echo "   ℹ️  Application Gateway not found - will be created"
           fi
           
-          # Skip Role Assignment Imports - they cause hanging issues
-          # Terraform will manage these during apply
-          echo "ℹ️  Skipping role assignment imports (ACR Pull, AGIC roles)"
-          echo "ℹ️  These will be managed by Terraform during apply phase"
+          # AKS (in error-team-rg2)
+          echo ""
+          echo "🔍 Checking AKS in error-team-rg2..."
+          if az aks show --name ${{ env.AKS_CLUSTER_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
+            AKS_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.ContainerService/managedClusters/${{ env.AKS_CLUSTER_NAME }}"
+            import_resource "AKS_Cluster" "module.aks.azurerm_kubernetes_cluster.aks" "$AKS_ID"
+          else
+            echo "   ℹ️  AKS not found - will be created"
+          fi
           
+          # Skip Role Assignments (they cause hangs and aren't critical for import)
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "ℹ️  Skipping role assignment imports (ACR Pull, AGIC roles)"
+          echo "   These will be managed by Terraform during apply phase"
           echo ""
           echo "✅ Auto-import step completed!"
-          echo "ℹ️  Check logs above for any import errors"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         env:
           ARM_CLIENT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
           ARM_CLIENT_SECRET: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
