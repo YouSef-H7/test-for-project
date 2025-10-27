@@ -16,7 +16,8 @@ on:
 
 env:
   # Azure Resources
-  RESOURCE_GROUP: error-team-rg
+  RESOURCE_GROUP: error-team-rg2
+  RESOURCE_GROUP_ALT: error-team-rg
   ACR_NAME: acrteam4
   AKS_CLUSTER_NAME: aks-cluster-team4
   
@@ -73,69 +74,67 @@ jobs:
         id: auto_import
         run: |
           echo "🔍 Checking and importing existing Azure resources..."
+          echo "ℹ️  Resources split across error-team-rg and error-team-rg2"
           
-          # ACR
-          echo "📦 Checking ACR..."
-          if az acr show --name ${{ env.ACR_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found ACR, attempting import..."
-            terraform import -no-color module.acr.azurerm_container_registry.acr "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.ContainerRegistry/registries/${{ env.ACR_NAME }}" 2>&1 | tee /tmp/acr_import.log || echo "⚠️  Import failed or already imported"
-            grep -q "Resource already managed" /tmp/acr_import.log && echo "✅ ACR already in state" || echo "✅ ACR imported successfully"
+          # ACR (in error-team-rg)
+          echo "📦 Checking ACR in error-team-rg..."
+          if az acr show --name ${{ env.ACR_NAME }} --resource-group ${{ env.RESOURCE_GROUP_ALT }} &>/dev/null; then
+            echo "✅ Found ACR in error-team-rg, attempting import..."
+            terraform import -no-color module.acr.azurerm_container_registry.acr "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP_ALT }}/providers/Microsoft.ContainerRegistry/registries/${{ env.ACR_NAME }}" 2>&1 | tee /tmp/acr_import.log || echo "⚠️  Import failed or already imported"
           else
             echo "ℹ️  ACR not found - will be created"
           fi
           
-          # AKS
-          echo "📦 Checking AKS..."
+          # AKS (in error-team-rg2)
+          echo "📦 Checking AKS in error-team-rg2..."
           if az aks show --name ${{ env.AKS_CLUSTER_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found AKS, attempting import..."
+            echo "✅ Found AKS in error-team-rg2, attempting import..."
             terraform import -no-color module.aks.azurerm_kubernetes_cluster.aks "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.ContainerService/managedClusters/${{ env.AKS_CLUSTER_NAME }}" 2>&1 | tee /tmp/aks_import.log || echo "⚠️  Import failed or already imported"
-            grep -q "Resource already managed" /tmp/aks_import.log && echo "✅ AKS already in state" || echo "✅ AKS imported successfully"
           else
             echo "ℹ️  AKS not found - will be created"
           fi
           
-          # Public IP
-          echo "📦 Checking Public IP..."
-          if az network public-ip show --name appgw-team4-pip --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found Public IP, attempting import..."
-            terraform import -no-color module.app_gateway.azurerm_public_ip.appgw_pip "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/publicIPAddresses/appgw-team4-pip" 2>&1 | tee /tmp/pip_import.log || echo "⚠️  Import failed or already imported"
-            grep -q "Resource already managed" /tmp/pip_import.log && echo "✅ Public IP already in state" || echo "✅ Public IP imported successfully"
+          # Public IP (in error-team-rg)
+          echo "📦 Checking Public IP in error-team-rg..."
+          if az network public-ip show --name appgw-team4-pip --resource-group ${{ env.RESOURCE_GROUP_ALT }} &>/dev/null; then
+            echo "✅ Found Public IP in error-team-rg, attempting import..."
+            terraform import -no-color module.app_gateway.azurerm_public_ip.appgw_pip "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP_ALT }}/providers/Microsoft.Network/publicIPAddresses/appgw-team4-pip" 2>&1 | tee /tmp/pip_import.log || echo "⚠️  Import failed or already imported"
           else
             echo "ℹ️  Public IP not found - will be created"
           fi
           
-          # VNet
-          echo "📦 Checking VNet..."
+          # VNet (in error-team-rg2)
+          echo "📦 Checking VNet in error-team-rg2..."
           if az network vnet show --name vnet-team4 --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found VNet, attempting import..."
+            echo "✅ Found VNet in error-team-rg2, attempting import..."
             terraform import -no-color module.network.azurerm_virtual_network.vnet "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4" 2>&1 | tee /tmp/vnet_import.log || echo "⚠️  Import failed or already imported"
           else
             echo "ℹ️  VNet not found - will be created"
           fi
           
-          # AKS Subnet
-          echo "📦 Checking AKS Subnet..."
+          # AKS Subnet (in error-team-rg2)
+          echo "📦 Checking AKS Subnet in error-team-rg2..."
           if az network vnet subnet show --name subnet-aks --vnet-name vnet-team4 --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found AKS Subnet, attempting import..."
+            echo "✅ Found AKS Subnet in error-team-rg2, attempting import..."
             terraform import -no-color module.network.azurerm_subnet.aks_subnet "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4/subnets/subnet-aks" 2>&1 | tee /tmp/aks_subnet_import.log || echo "⚠️  Import failed or already imported"
           else
             echo "ℹ️  AKS Subnet not found - will be created"
           fi
           
-          # Application Gateway Subnet
-          echo "📦 Checking App Gateway Subnet..."
+          # Application Gateway Subnet (in error-team-rg2)
+          echo "📦 Checking App Gateway Subnet in error-team-rg2..."
           if az network vnet subnet show --name subnet-appgw --vnet-name vnet-team4 --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found App Gateway Subnet, attempting import..."
+            echo "✅ Found App Gateway Subnet in error-team-rg2, attempting import..."
             terraform import -no-color module.network.azurerm_subnet.appgw_subnet "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4/subnets/subnet-appgw" 2>&1 | tee /tmp/appgw_subnet_import.log || echo "⚠️  Import failed or already imported"
           else
             echo "ℹ️  App Gateway Subnet not found - will be created"
           fi
           
-          # Application Gateway
-          echo "📦 Checking Application Gateway..."
-          if az network application-gateway show --name appgw-team4 --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found Application Gateway, attempting import..."
-            terraform import -no-color module.app_gateway.azurerm_application_gateway.app_gateway "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/applicationGateways/appgw-team4" 2>&1 | tee /tmp/appgw_import.log || echo "⚠️  Import failed or already imported"
+          # Application Gateway (in error-team-rg)
+          echo "📦 Checking Application Gateway in error-team-rg..."
+          if az network application-gateway show --name appgw-team4 --resource-group ${{ env.RESOURCE_GROUP_ALT }} &>/dev/null; then
+            echo "✅ Found Application Gateway in error-team-rg, attempting import..."
+            terraform import -no-color module.app_gateway.azurerm_application_gateway.app_gateway "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP_ALT }}/providers/Microsoft.Network/applicationGateways/appgw-team4" 2>&1 | tee /tmp/appgw_import.log || echo "⚠️  Import failed or already imported"
           else
             echo "ℹ️  Application Gateway not found - will be created"
           fi
