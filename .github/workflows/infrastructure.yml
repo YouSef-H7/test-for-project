@@ -89,32 +89,38 @@ jobs:
             
             echo ""
             echo "📦 Importing: $RESOURCE_NAME"
+            echo "   Address: $TF_ADDRESS"
             
             for attempt in $(seq 1 $MAX_RETRIES); do
               echo "   Attempt $attempt/$MAX_RETRIES..."
               
-              if timeout ${TIMEOUT}s terraform import -no-color "$TF_ADDRESS" "$AZURE_ID" 2>&1 | tee /tmp/import_${RESOURCE_NAME}.log; then
+              # Run import with proper error handling
+              set +e
+              timeout ${TIMEOUT}s terraform import -no-color -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" "$TF_ADDRESS" "$AZURE_ID" > /tmp/import_${RESOURCE_NAME}.log 2>&1
+              EXIT_CODE=$?
+              set -e
+              
+              # Check the result
+              if [ $EXIT_CODE -eq 0 ]; then
                 echo "   ✅ Successfully imported $RESOURCE_NAME"
                 return 0
+              elif [ $EXIT_CODE -eq 124 ]; then
+                echo "   ⏰ Timeout after ${TIMEOUT}s"
+              elif grep -qi "already managed\|Resource already managed by Terraform" /tmp/import_${RESOURCE_NAME}.log 2>/dev/null; then
+                echo "   ℹ️  Already in Terraform state - OK"
+                return 0
               else
-                EXIT_CODE=$?
-                if [ $EXIT_CODE -eq 124 ]; then
-                  echo "   ⏰ Timeout after ${TIMEOUT}s on attempt $attempt"
-                elif grep -q "already exists" /tmp/import_${RESOURCE_NAME}.log 2>/dev/null; then
-                  echo "   ℹ️  Already managed by Terraform"
-                  return 0
-                else
-                  echo "   ⚠️  Failed on attempt $attempt (exit code: $EXIT_CODE)"
-                fi
-                
-                if [ $attempt -lt $MAX_RETRIES ]; then
-                  echo "   🔄 Retrying in 3 seconds..."
-                  sleep 3
-                fi
+                echo "   ⚠️  Import failed (exit: $EXIT_CODE)"
+                tail -3 /tmp/import_${RESOURCE_NAME}.log 2>/dev/null | sed 's/^/      /'
+              fi
+              
+              if [ $attempt -lt $MAX_RETRIES ]; then
+                echo "   🔄 Retrying..."
+                sleep 2
               fi
             done
             
-            echo "   ❌ Skipping $RESOURCE_NAME after $MAX_RETRIES attempts"
+            echo "   ❌ Failed to import $RESOURCE_NAME"
             return 1
           }
           
