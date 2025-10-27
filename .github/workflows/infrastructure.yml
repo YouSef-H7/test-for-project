@@ -16,7 +16,7 @@ on:
 
 env:
   # Azure Resources
-  RESOURCE_GROUP: error-team-rg2
+  RESOURCE_GROUP: error-team-rg
   ACR_NAME: acrteam4
   AKS_CLUSTER_NAME: aks-cluster-team4
   
