@@ -6,6 +6,9 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: azure/application-gateway
     appgw.ingress.kubernetes.io/health-probe-path: /actuator/health
+    appgw.ingress.kubernetes.io/health-probe-interval: "15"
+    appgw.ingress.kubernetes.io/health-probe-timeout: "10"
+    appgw.ingress.kubernetes.io/health-probe-unhealthy-threshold: "3"
     appgw.ingress.kubernetes.io/request-routing-rule-priority: "100"
 spec:
   rules:

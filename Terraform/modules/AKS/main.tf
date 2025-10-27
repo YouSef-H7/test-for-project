@@ -25,7 +25,9 @@ resource "azurerm_kubernetes_cluster" "aks" {
     dns_service_ip    = "172.16.0.10"
   }
 
-
+  ingress_application_gateway {
+    gateway_id = var.app_gateway_id
+  }
 
   tags = {
     environment = "dev"
@@ -38,5 +40,21 @@ resource "azurerm_role_assignment" "acr_pull" {
   scope                = var.acr_id
   role_definition_name = "AcrPull"
   principal_id         = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
+  depends_on           = [azurerm_kubernetes_cluster.aks]
+}
+
+# AGIC Network Contributor role on the Application Gateway subnet
+resource "azurerm_role_assignment" "agic_subnet" {
+  scope                = var.app_gateway_subnet_id
+  role_definition_name = "Network Contributor"
+  principal_id         = azurerm_kubernetes_cluster.aks.ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
+  depends_on           = [azurerm_kubernetes_cluster.aks]
+}
+
+# AGIC Contributor role on the Application Gateway
+resource "azurerm_role_assignment" "agic_appgw" {
+  scope                = var.app_gateway_id
+  role_definition_name = "Contributor"
+  principal_id         = azurerm_kubernetes_cluster.aks.ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
   depends_on           = [azurerm_kubernetes_cluster.aks]
 }

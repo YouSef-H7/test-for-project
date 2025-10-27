@@ -17,8 +17,12 @@ module "aks" {
   location            = var.location
   cluster_name        = var.cluster_name
 
-  vnet_subnet_id = module.network.aks_subnet_id
-  acr_id         = module.acr.acr_id
+  vnet_subnet_id        = module.network.aks_subnet_id
+  acr_id                = module.acr.acr_id
+  app_gateway_id        = module.app_gateway.appgw_id
+  app_gateway_subnet_id = module.network.appgw_subnet_id
+
+  depends_on = [module.app_gateway]
 }
 
 module "app_gateway" {

@@ -35,3 +35,13 @@ variable "acr_id" {
   description = "The ID of the Azure Container Registry (ACR) to grant AKS AcrPull access."
   type        = string
 }
+
+variable "app_gateway_id" {
+  description = "The ID of the Application Gateway for AGIC integration."
+  type        = string
+}
+
+variable "app_gateway_subnet_id" {
+  description = "The ID of the Application Gateway subnet for AGIC permissions."
+  type        = string
+}
