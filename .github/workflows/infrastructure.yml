@@ -330,7 +330,25 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform output -no-color
 
-      - name: 📝 Infrastructure Summary
+      - name: � Restart AGIC to Apply Configuration
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          echo "🔄 Restarting Application Gateway Ingress Controller..."
+          echo "   This ensures AGIC picks up any infrastructure changes"
+          
+          # Get AKS credentials
+          az aks get-credentials --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.AKS_CLUSTER_NAME }} --overwrite-existing
+          
+          # Restart AGIC pod
+          kubectl delete pod -n kube-system -l app=ingress-appgw
+          
+          echo "   ⏳ Waiting for new AGIC pod to start..."
+          kubectl wait --for=condition=ready pod -n kube-system -l app=ingress-appgw --timeout=120s
+          
+          echo "   ✅ AGIC restarted and ready"
+          echo "   ℹ️  Application Gateway backend pools will update in ~60 seconds"
+
+      - name:  Infrastructure Summary
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
           echo "═══════════════════════════════════════════════════"
@@ -340,5 +358,16 @@ jobs:
           echo "📦 Resource Group: ${{ env.RESOURCE_GROUP }}"
           echo "🐳 ACR: ${{ env.ACR_NAME }}"
           echo "☸️  AKS Cluster: ${{ env.AKS_CLUSTER_NAME }}"
+          echo ""
+          
+          # Get Application Gateway Public IP
+          APPGW_IP=$(az network public-ip show --name appgw-team4-pip --resource-group ${{ env.RESOURCE_GROUP_ALT }} --query ipAddress -o tsv 2>/dev/null || echo "Not available")
+          
+          echo "🌐 Application URLs:"
+          echo "   Frontend: http://$APPGW_IP/"
+          echo "   Backend Health: http://$APPGW_IP/actuator/health"
+          echo "   Backend API: http://$APPGW_IP/api/"
+          echo ""
+          echo "⏳ Note: Wait ~60 seconds after deployment for Application Gateway to become fully ready"
           echo ""
           echo "═══════════════════════════════════════════════════"
