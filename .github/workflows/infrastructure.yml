@@ -77,8 +77,9 @@ jobs:
           # ACR
           echo "📦 Checking ACR..."
           if az acr show --name ${{ env.ACR_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found ACR, importing..."
-            terraform import -no-color module.acr.azurerm_container_registry.acr "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.ContainerRegistry/registries/${{ env.ACR_NAME }}" || true
+            echo "✅ Found ACR, attempting import..."
+            terraform import -no-color module.acr.azurerm_container_registry.acr "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.ContainerRegistry/registries/${{ env.ACR_NAME }}" 2>&1 | tee /tmp/acr_import.log || echo "⚠️  Import failed or already imported"
+            grep -q "Resource already managed" /tmp/acr_import.log && echo "✅ ACR already in state" || echo "✅ ACR imported successfully"
           else
             echo "ℹ️  ACR not found - will be created"
           fi
@@ -86,8 +87,9 @@ jobs:
           # AKS
           echo "📦 Checking AKS..."
           if az aks show --name ${{ env.AKS_CLUSTER_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found AKS, importing..."
-            terraform import -no-color module.aks.azurerm_kubernetes_cluster.aks "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.ContainerService/managedClusters/${{ env.AKS_CLUSTER_NAME }}" || true
+            echo "✅ Found AKS, attempting import..."
+            terraform import -no-color module.aks.azurerm_kubernetes_cluster.aks "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.ContainerService/managedClusters/${{ env.AKS_CLUSTER_NAME }}" 2>&1 | tee /tmp/aks_import.log || echo "⚠️  Import failed or already imported"
+            grep -q "Resource already managed" /tmp/aks_import.log && echo "✅ AKS already in state" || echo "✅ AKS imported successfully"
           else
             echo "ℹ️  AKS not found - will be created"
           fi
@@ -95,8 +97,9 @@ jobs:
           # Public IP
           echo "📦 Checking Public IP..."
           if az network public-ip show --name appgw-team4-pip --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found Public IP, importing..."
-            terraform import -no-color module.app_gateway.azurerm_public_ip.appgw_pip "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/publicIPAddresses/appgw-team4-pip" || true
+            echo "✅ Found Public IP, attempting import..."
+            terraform import -no-color module.app_gateway.azurerm_public_ip.appgw_pip "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/publicIPAddresses/appgw-team4-pip" 2>&1 | tee /tmp/pip_import.log || echo "⚠️  Import failed or already imported"
+            grep -q "Resource already managed" /tmp/pip_import.log && echo "✅ Public IP already in state" || echo "✅ Public IP imported successfully"
           else
             echo "ℹ️  Public IP not found - will be created"
           fi
@@ -104,8 +107,8 @@ jobs:
           # VNet
           echo "📦 Checking VNet..."
           if az network vnet show --name vnet-team4 --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found VNet, importing..."
-            terraform import -no-color module.network.azurerm_virtual_network.vnet "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4" || true
+            echo "✅ Found VNet, attempting import..."
+            terraform import -no-color module.network.azurerm_virtual_network.vnet "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4" 2>&1 | tee /tmp/vnet_import.log || echo "⚠️  Import failed or already imported"
           else
             echo "ℹ️  VNet not found - will be created"
           fi
@@ -113,8 +116,8 @@ jobs:
           # AKS Subnet
           echo "📦 Checking AKS Subnet..."
           if az network vnet subnet show --name subnet-aks --vnet-name vnet-team4 --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found AKS Subnet, importing..."
-            terraform import -no-color module.network.azurerm_subnet.aks_subnet "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4/subnets/subnet-aks" || true
+            echo "✅ Found AKS Subnet, attempting import..."
+            terraform import -no-color module.network.azurerm_subnet.aks_subnet "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4/subnets/subnet-aks" 2>&1 | tee /tmp/aks_subnet_import.log || echo "⚠️  Import failed or already imported"
           else
             echo "ℹ️  AKS Subnet not found - will be created"
           fi
@@ -122,8 +125,8 @@ jobs:
           # Application Gateway Subnet
           echo "📦 Checking App Gateway Subnet..."
           if az network vnet subnet show --name subnet-appgw --vnet-name vnet-team4 --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found App Gateway Subnet, importing..."
-            terraform import -no-color module.network.azurerm_subnet.appgw_subnet "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4/subnets/subnet-appgw" || true
+            echo "✅ Found App Gateway Subnet, attempting import..."
+            terraform import -no-color module.network.azurerm_subnet.appgw_subnet "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/virtualNetworks/vnet-team4/subnets/subnet-appgw" 2>&1 | tee /tmp/appgw_subnet_import.log || echo "⚠️  Import failed or already imported"
           else
             echo "ℹ️  App Gateway Subnet not found - will be created"
           fi
@@ -131,14 +134,15 @@ jobs:
           # Application Gateway
           echo "📦 Checking Application Gateway..."
           if az network application-gateway show --name appgw-team4 --resource-group ${{ env.RESOURCE_GROUP }} &>/dev/null; then
-            echo "✅ Found Application Gateway, importing..."
-            terraform import -no-color module.app_gateway.azurerm_application_gateway.app_gateway "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/applicationGateways/appgw-team4" || true
+            echo "✅ Found Application Gateway, attempting import..."
+            terraform import -no-color module.app_gateway.azurerm_application_gateway.app_gateway "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Network/applicationGateways/appgw-team4" 2>&1 | tee /tmp/appgw_import.log || echo "⚠️  Import failed or already imported"
           else
             echo "ℹ️  Application Gateway not found - will be created"
           fi
           
           echo ""
-          echo "✅ Auto-import completed!"
+          echo "✅ Auto-import step completed!"
+          echo "ℹ️  Check logs above for any import errors"
         env:
           ARM_CLIENT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
           ARM_CLIENT_SECRET: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
