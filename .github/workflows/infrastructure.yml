@@ -31,6 +31,7 @@ jobs:
   terraform:
     name: 🏗️ Terraform Validate & Apply
     runs-on: ubuntu-latest
+    timeout-minutes: 45  # Add overall job timeout
     
     defaults:
       run:
@@ -72,6 +73,7 @@ jobs:
 
       - name: 🧠 Auto Import Existing Azure Resources
         id: auto_import
+        timeout-minutes: 10  # Add step-level timeout
         run: |
           echo "🔍 Checking and importing existing Azure resources..."
           echo "ℹ️  Resources split across error-team-rg and error-team-rg2"
@@ -151,12 +153,14 @@ jobs:
               echo "✅ Found ACR Pull role assignment, attempting import..."
               echo "Import command: terraform import -no-color module.aks.azurerm_role_assignment.acr_pull $ROLE_ASSIGNMENT_ID"
               echo "--- BEGIN ACR IMPORT ---"
-              timeout 120 terraform import -no-color module.aks.azurerm_role_assignment.acr_pull "$ROLE_ASSIGNMENT_ID" 2>&1 | tee /tmp/role_import.log
+              timeout 60 terraform import -no-color module.aks.azurerm_role_assignment.acr_pull "$ROLE_ASSIGNMENT_ID" 2>&1 | tee /tmp/role_import.log || true
               IMPORT_EXIT_CODE=${PIPESTATUS[0]}
               echo "--- END ACR IMPORT (exit code: $IMPORT_EXIT_CODE) ---"
-              cat /tmp/role_import.log
-              if [ $IMPORT_EXIT_CODE -ne 0 ]; then
-                echo "❌ Import failed with exit code $IMPORT_EXIT_CODE. See above for details."
+              cat /tmp/role_import.log || true
+              if [ $IMPORT_EXIT_CODE -eq 124 ]; then
+                echo "⏰ Import timed out after 60 seconds - skipping"
+              elif [ $IMPORT_EXIT_CODE -ne 0 ]; then
+                echo "❌ Import failed with exit code $IMPORT_EXIT_CODE - continuing anyway"
               fi
             else
               echo "ℹ️  ACR Pull role assignment not found - will be created"
@@ -178,10 +182,12 @@ jobs:
             if [ -n "$AGIC_SUBNET_ROLE" ]; then
               echo "✅ Found AGIC Network Contributor role on subnet, attempting import..."
               echo "Import command: terraform import -no-color module.aks.azurerm_role_assignment.agic_subnet $AGIC_SUBNET_ROLE"
-              timeout 120 terraform import -no-color module.aks.azurerm_role_assignment.agic_subnet "$AGIC_SUBNET_ROLE" 2>&1 | tee /tmp/agic_subnet_role.log
+              timeout 60 terraform import -no-color module.aks.azurerm_role_assignment.agic_subnet "$AGIC_SUBNET_ROLE" 2>&1 | tee /tmp/agic_subnet_role.log || true
               IMPORT_EXIT_CODE=${PIPESTATUS[0]}
-              if [ $IMPORT_EXIT_CODE -ne 0 ]; then
-                echo "❌ Import failed with exit code $IMPORT_EXIT_CODE. See /tmp/agic_subnet_role.log for details."
+              if [ $IMPORT_EXIT_CODE -eq 124 ]; then
+                echo "⏰ Import timed out after 60 seconds - skipping"
+              elif [ $IMPORT_EXIT_CODE -ne 0 ]; then
+                echo "❌ Import failed with exit code $IMPORT_EXIT_CODE - continuing anyway"
               fi
             else
               echo "ℹ️  AGIC subnet role assignment not found - will be created"
@@ -195,10 +201,12 @@ jobs:
             if [ -n "$AGIC_APPGW_ROLE" ]; then
               echo "✅ Found AGIC Contributor role on App Gateway, attempting import..."
               echo "Import command: terraform import -no-color module.aks.azurerm_role_assignment.agic_appgw $AGIC_APPGW_ROLE"
-              timeout 120 terraform import -no-color module.aks.azurerm_role_assignment.agic_appgw "$AGIC_APPGW_ROLE" 2>&1 | tee /tmp/agic_appgw_role.log
+              timeout 60 terraform import -no-color module.aks.azurerm_role_assignment.agic_appgw "$AGIC_APPGW_ROLE" 2>&1 | tee /tmp/agic_appgw_role.log || true
               IMPORT_EXIT_CODE=${PIPESTATUS[0]}
-              if [ $IMPORT_EXIT_CODE -ne 0 ]; then
-                echo "❌ Import failed with exit code $IMPORT_EXIT_CODE. See /tmp/agic_appgw_role.log for details."
+              if [ $IMPORT_EXIT_CODE -eq 124 ]; then
+                echo "⏰ Import timed out after 60 seconds - skipping"
+              elif [ $IMPORT_EXIT_CODE -ne 0 ]; then
+                echo "❌ Import failed with exit code $IMPORT_EXIT_CODE - continuing anyway"
               fi
             else
               echo "ℹ️  AGIC App Gateway role assignment not found - will be created"
