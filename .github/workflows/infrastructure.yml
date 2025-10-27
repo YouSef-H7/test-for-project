@@ -205,10 +205,20 @@ jobs:
 
       - name: 📋 Terraform Plan
         id: plan
+        timeout-minutes: 15
         run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 Running Terraform Plan..."
+          echo "ℹ️  This may take 5-10 minutes for large infrastructure"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
           terraform plan \
             -out=tfplan \
-            -no-color
+            -no-color \
+            -input=false
+          
+          echo ""
+          echo "✅ Terraform plan completed successfully!"
         env:
           ARM_CLIENT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
           ARM_CLIENT_SECRET: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
@@ -246,8 +256,17 @@ jobs:
       - name: 🚀 Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: apply
+        timeout-minutes: 30
         run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🚀 Applying Terraform changes..."
+          echo "ℹ️  This may take 10-20 minutes for infrastructure changes"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
           terraform apply -auto-approve tfplan
+          
+          echo ""
+          echo "✅ Terraform apply completed successfully!"
         env:
           ARM_CLIENT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
           ARM_CLIENT_SECRET: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
